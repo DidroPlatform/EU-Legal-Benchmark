@@ -1,0 +1,1 @@
+{"provider": "mistral_api", "model": "mistral/magistral-medium-latest", "text": "", "usage": {"prompt_tokens": 112, "completion_tokens": 4096, "total_tokens": 4208}, "latency_s": 111.40204074999201, "request_id": "f2d319f84ba24f28b447cc3b0a6740e6", "raw_response": null}

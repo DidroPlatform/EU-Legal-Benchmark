@@ -1,0 +1,207 @@
+providers:
+  # NVIDIA NIM via OpenAI-compatible endpoint through LiteLLM.
+  nim:
+    api_key_env: NVIDIA_API_KEY
+    base_url: https://integrate.api.nvidia.com/v1
+    timeout_s: 180
+
+  # Amazon Bedrock routed by LiteLLM (`bedrock/...` model prefix).
+  bedrock:
+    # Either use API key mode (AWS_BEARER_TOKEN_BEDROCK) or switch to null and rely on AWS credentials.
+    api_key_env: AWS_BEARER_TOKEN_BEDROCK
+    timeout_s: 180
+
+  # Direct Mistral API through LiteLLM (`mistral/...` model prefix).
+  mistral_api:
+    api_key_env: MISTRAL_API_KEY
+    timeout_s: 120
+
+  # Vercel AI Gateway via LiteLLM (`vercel_ai_gateway/...` model prefix).
+  vercel_gateway:
+    api_key_env: AI_GATEWAY_API_KEY
+    base_url: https://ai-gateway.vercel.sh/v1
+    timeout_s: 120
+
+  # Judge-only Gemini provider (native google-genai client).
+  google_genai:
+    api_key_env: GEMINI_API_KEY
+    timeout_s: 120
+
+data:
+  datasets:
+    # Canonical merged eval file built by: `uv run python build_for_eval.py`
+    - name: legal_eval_v1_merged
+      path: data/for_eval/merged_legal_eval_v1.jsonl
+      provenance: canonical_legal_eval_v1
+      judge_mode: auto
+      enabled: true
+      split_field: null
+      split_value: null
+      limit: null
+
+candidates:
+  # Bedrock
+  - name: bedrock_claude_opus_4_6
+    provider: bedrock
+    model: bedrock/anthropic.claude-opus-4-6-v1
+    temperature: 0.2
+    top_p: null
+    max_tokens: 4096
+    seed: null
+    extra_body: null
+
+  - name: bedrock_claude_sonnet_4_5
+    provider: bedrock
+    model: bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0
+    temperature: 0.2
+    top_p: null
+    max_tokens: 4096
+    seed: null
+    extra_body: null
+
+  - name: bedrock_claude_haiku_4_5
+    provider: bedrock
+    model: bedrock/anthropic.claude-haiku-4-5-20251001-v1:0
+    temperature: 0.2
+    top_p: null
+    max_tokens: 4096
+    seed: null
+    extra_body: null
+
+  - name: bedrock_gpt_oss_120b
+    provider: bedrock
+    model: bedrock/converse/openai.gpt-oss-120b-1:0
+    temperature: 0.2
+    top_p: null
+    max_tokens: 4096
+    seed: null
+    extra_body: null
+
+  # NVIDIA NIM
+  - name: nim_kimi_k2_5
+    provider: nim
+    model: moonshotai/kimi-k2.5
+    temperature: 0.8
+    top_p: null
+    max_tokens: 8192
+    seed: null
+    extra_body: null
+
+  - name: nim_glm5
+    provider: nim
+    model: z-ai/glm5
+    temperature: 0.8
+    top_p: null
+    max_tokens: 8192
+    seed: null
+    extra_body: null
+
+  - name: nim_minimax_m2_1
+    provider: nim
+    model: minimaxai/minimax-m2.1
+    temperature: 0.8
+    top_p: null
+    max_tokens: 8192
+    seed: null
+    extra_body: null
+
+  - name: nim_deepseek_v3_2
+    provider: nim
+    model: deepseek-ai/deepseek-v3.2
+    temperature: 0.8
+    top_p: null
+    max_tokens: 8192
+    seed: null
+    extra_body: null
+
+  - name: nim_qwen3_235b_a22b
+    provider: nim
+    model: qwen/qwen3-235b-a22b
+    temperature: 0.2
+    top_p: null
+    max_tokens: 8192
+    seed: null
+    extra_body: null
+
+  # Mistral
+  - name: mistral_large_latest
+    provider: mistral_api
+    model: mistral/mistral-large-latest
+    temperature: 0.2
+    top_p: null
+    max_tokens: 4096
+    seed: null
+    extra_body: null
+
+  - name: magistral_medium_latest
+    provider: mistral_api
+    model: mistral/magistral-medium-latest
+    temperature: 0.2
+    top_p: null
+    max_tokens: 4096
+    seed: null
+    extra_body: null
+
+  # Vercel AI Gateway
+  - name: vercel_openai_gpt_5_2
+    provider: vercel_gateway
+    model: vercel_ai_gateway/openai/gpt-5.2
+    temperature: 0.2
+    top_p: null
+    max_tokens: 4096
+    seed: null
+    extra_body: null
+
+  - name: vercel_xai_grok_4_1_fast_reasoning
+    provider: vercel_gateway
+    model: vercel_ai_gateway/xai/grok-4.1-fast-reasoning
+    temperature: 0.2
+    top_p: null
+    max_tokens: 4096
+    seed: null
+    extra_body: null
+
+judges:
+  - name: judge_gemini_flash_lite
+    provider: google_genai
+    model: gemini-flash-lite-latest
+    temperature: 0.0
+    top_p: null
+    frequency_penalty: null
+    presence_penalty: null
+    max_tokens: 700
+    seed: 11
+    extra_body:
+      thinking_config:
+        thinking_budget: 0
+
+retry:
+  max_attempts: 5
+  base_delay_s: 1.0
+  max_delay_s: 30.0
+
+cache:
+  enabled: true
+  dir: cache
+
+run:
+  run_id: null
+  runs_root: data/runs
+  output_dir: outputs
+  default_system_prompt: >-
+    You are a careful legal reasoning assistant. Answer clearly and concisely,
+    state uncertainty when needed, and avoid fabrication.
+  judge_pass_threshold: 0.7
+  # Parallel generation worker count across the full (candidate x example) queue.
+  response_parallel_workers: 8
+  # Shared generation throttle across all workers; hard-capped to 1..50.
+  response_rate_limit_rpm: 50
+  # Optional provider-specific generation throttles (also capped to 1..50).
+  # Useful when one provider (e.g. NIM) needs a lower effective request rate.
+  provider_response_rate_limit_rpm:
+    nim: 20
+  # Parallel rubric grading worker count (per candidate response).
+  judge_parallel_workers: 4
+  # Conservative Gemini judge throttle; set 0 to disable throttling.
+  judge_rate_limit_rpm: 12
+  include_raw_provider_response: false

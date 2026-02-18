@@ -1,0 +1,1 @@
+{"provider": "mistral_api", "model": "mistral/magistral-medium-latest", "text": "{\"answer\": \"D\", \"reasoning\": \"All statements are correct.\"}", "usage": {"prompt_tokens": 290, "completion_tokens": 2986, "total_tokens": 3276}, "latency_s": 100.24205054200138, "request_id": "9feb7cdef3994c43b229c26e8b9c50f9", "raw_response": null}

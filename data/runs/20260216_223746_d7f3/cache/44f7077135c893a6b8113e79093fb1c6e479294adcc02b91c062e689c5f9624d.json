@@ -1,0 +1,1 @@
+{"provider": "bedrock", "model": "bedrock/arn:aws:bedrock:eu-north-1:478715309701:inference-profile/eu.anthropic.claude-opus-4-6-v1", "text": "", "usage": {"prompt_tokens": 102, "completion_tokens": 1, "total_tokens": 103}, "latency_s": 5.230540958000347, "request_id": "chatcmpl-e343d631-9f01-499e-99ef-23a758df65ab", "raw_response": null}

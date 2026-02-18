@@ -1,0 +1,200 @@
+{
+  "models": {
+    "bedrock_claude_opus_4_6": {
+      "responses": 125,
+      "judged": 125,
+      "score_sum": 67.67391464004038,
+      "pass_count": 53,
+      "avg_score": 0.5413913171203231,
+      "pass_rate": 0.424
+    },
+    "bedrock_claude_sonnet_4_5": {
+      "responses": 125,
+      "judged": 125,
+      "score_sum": 59.34436784629261,
+      "pass_count": 47,
+      "avg_score": 0.4747549427703409,
+      "pass_rate": 0.376
+    },
+    "bedrock_claude_haiku_4_5": {
+      "responses": 125,
+      "judged": 125,
+      "score_sum": 44.19759510716586,
+      "pass_count": 33,
+      "avg_score": 0.35358076085732687,
+      "pass_rate": 0.264
+    },
+    "bedrock_gpt_oss_120b": {
+      "responses": 125,
+      "judged": 125,
+      "score_sum": 51.93293003373408,
+      "pass_count": 39,
+      "avg_score": 0.41546344026987264,
+      "pass_rate": 0.312
+    },
+    "mistral_large_latest": {
+      "responses": 125,
+      "judged": 125,
+      "score_sum": 52.9927319417013,
+      "pass_count": 41,
+      "avg_score": 0.4239418555336104,
+      "pass_rate": 0.328
+    },
+    "magistral_medium_latest": {
+      "responses": 124,
+      "judged": 124,
+      "score_sum": 45.98180766162915,
+      "pass_count": 38,
+      "avg_score": 0.3708210295292673,
+      "pass_rate": 0.3064516129032258
+    },
+    "vercel_openai_gpt_5_2": {
+      "responses": 125,
+      "judged": 125,
+      "score_sum": 51.40172051232399,
+      "pass_count": 37,
+      "avg_score": 0.41121376409859195,
+      "pass_rate": 0.296
+    },
+    "vercel_xai_grok_4_1_fast_reasoning": {
+      "responses": 125,
+      "judged": 125,
+      "score_sum": 60.48313407404575,
+      "pass_count": 49,
+      "avg_score": 0.483865072592366,
+      "pass_rate": 0.392
+    }
+  },
+  "by_dataset": {
+    "legal_eval_v1_merged": {
+      "bedrock_claude_opus_4_6": {
+        "responses": 125,
+        "judged": 125,
+        "score_sum": 67.67391464004038,
+        "pass_count": 53,
+        "avg_score": 0.5413913171203231,
+        "pass_rate": 0.424
+      },
+      "bedrock_claude_sonnet_4_5": {
+        "responses": 125,
+        "judged": 125,
+        "score_sum": 59.34436784629261,
+        "pass_count": 47,
+        "avg_score": 0.4747549427703409,
+        "pass_rate": 0.376
+      },
+      "bedrock_claude_haiku_4_5": {
+        "responses": 125,
+        "judged": 125,
+        "score_sum": 44.19759510716586,
+        "pass_count": 33,
+        "avg_score": 0.35358076085732687,
+        "pass_rate": 0.264
+      },
+      "bedrock_gpt_oss_120b": {
+        "responses": 125,
+        "judged": 125,
+        "score_sum": 51.93293003373408,
+        "pass_count": 39,
+        "avg_score": 0.41546344026987264,
+        "pass_rate": 0.312
+      },
+      "mistral_large_latest": {
+        "responses": 125,
+        "judged": 125,
+        "score_sum": 52.9927319417013,
+        "pass_count": 41,
+        "avg_score": 0.4239418555336104,
+        "pass_rate": 0.328
+      },
+      "magistral_medium_latest": {
+        "responses": 124,
+        "judged": 124,
+        "score_sum": 45.98180766162915,
+        "pass_count": 38,
+        "avg_score": 0.3708210295292673,
+        "pass_rate": 0.3064516129032258
+      },
+      "vercel_openai_gpt_5_2": {
+        "responses": 125,
+        "judged": 125,
+        "score_sum": 51.40172051232399,
+        "pass_count": 37,
+        "avg_score": 0.41121376409859195,
+        "pass_rate": 0.296
+      },
+      "vercel_xai_grok_4_1_fast_reasoning": {
+        "responses": 125,
+        "judged": 125,
+        "score_sum": 60.48313407404575,
+        "pass_count": 49,
+        "avg_score": 0.483865072592366,
+        "pass_rate": 0.392
+      }
+    }
+  },
+  "num_responses": 999,
+  "num_judgments": 999,
+  "run_id": "20260216_223746_d7f3",
+  "run_started_at_utc": "2026-02-17T18:22:31.131229+00:00",
+  "selected_examples": 125,
+  "datasets": [
+    {
+      "dataset": "legal_eval_v1_merged",
+      "path": "data/for_eval/merged_legal_eval_v1.jsonl",
+      "provenance": "canonical_legal_eval_v1",
+      "judge_mode": "auto",
+      "selected_examples": 125
+    }
+  ],
+  "judge": {
+    "name": "judge_gemini_flash_lite",
+    "provider": "google_genai",
+    "model": "gemini-flash-lite-latest",
+    "settings": {
+      "temperature": 0.0,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 700,
+      "seed": 11,
+      "extra_body": {
+        "thinking_config": {
+          "thinking_budget": 0
+        }
+      }
+    }
+  },
+  "judges": [
+    {
+      "name": "judge_gemini_flash_lite",
+      "provider": "google_genai",
+      "model": "gemini-flash-lite-latest",
+      "settings": {
+        "temperature": 0.0,
+        "top_p": null,
+        "frequency_penalty": null,
+        "presence_penalty": null,
+        "max_tokens": 700,
+        "seed": 11,
+        "extra_body": {
+          "thinking_config": {
+            "thinking_budget": 0
+          }
+        }
+      }
+    }
+  ],
+  "failed_items": [
+    {
+      "display_index": 666,
+      "candidate_name": "magistral_medium_latest",
+      "example_id": "lexam:mcq:46ec8b1e-e4ad-4d4c-be9c-538a263fb7a5:3",
+      "dataset": "legal_eval_v1_merged",
+      "error": "litellm.RateLimitError: RateLimitError: MistralException - {\"object\":\"error\",\"message\":\"Service tier capacity exceeded for this model.\",\"type\":\"service_tier_capacity_exceeded\",\"param\":null,\"code\":\"3505\"}"
+    }
+  ],
+  "num_failures": 1,
+  "run_status": "completed",
+  "interrupted_stage": null
+}

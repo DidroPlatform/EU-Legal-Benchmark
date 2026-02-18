@@ -1,0 +1,177 @@
+{
+  "providers": [
+    "bedrock",
+    "google_genai",
+    "mistral_api",
+    "nim",
+    "vercel_gateway"
+  ],
+  "candidates": [
+    {
+      "name": "bedrock_claude_opus_4_6",
+      "provider": "bedrock",
+      "model": "bedrock/arn:aws:bedrock:eu-north-1:478715309701:inference-profile/eu.anthropic.claude-opus-4-6-v1",
+      "temperature": 0.2,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 4096,
+      "seed": null,
+      "extra_body": null
+    },
+    {
+      "name": "bedrock_claude_sonnet_4_5",
+      "provider": "bedrock",
+      "model": "bedrock/arn:aws:bedrock:eu-north-1:478715309701:inference-profile/eu.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "temperature": 0.2,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 4096,
+      "seed": null,
+      "extra_body": null
+    },
+    {
+      "name": "bedrock_claude_haiku_4_5",
+      "provider": "bedrock",
+      "model": "bedrock/arn:aws:bedrock:eu-north-1:478715309701:inference-profile/eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "temperature": 0.2,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 4096,
+      "seed": null,
+      "extra_body": null
+    },
+    {
+      "name": "bedrock_gpt_oss_120b",
+      "provider": "bedrock",
+      "model": "bedrock/converse/openai.gpt-oss-120b-1:0",
+      "temperature": 0.2,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 4096,
+      "seed": null,
+      "extra_body": null
+    },
+    {
+      "name": "mistral_large_latest",
+      "provider": "mistral_api",
+      "model": "mistral/mistral-large-latest",
+      "temperature": 0.2,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 4096,
+      "seed": null,
+      "extra_body": null
+    },
+    {
+      "name": "magistral_medium_latest",
+      "provider": "mistral_api",
+      "model": "mistral/magistral-medium-latest",
+      "temperature": 0.2,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 4096,
+      "seed": null,
+      "extra_body": null
+    },
+    {
+      "name": "vercel_openai_gpt_5_2",
+      "provider": "vercel_gateway",
+      "model": "vercel_ai_gateway/openai/gpt-5.2",
+      "temperature": 0.2,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 4096,
+      "seed": null,
+      "extra_body": null
+    },
+    {
+      "name": "vercel_xai_grok_4_1_fast_reasoning",
+      "provider": "vercel_gateway",
+      "model": "vercel_ai_gateway/xai/grok-4.1-fast-reasoning",
+      "temperature": 0.2,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 4096,
+      "seed": null,
+      "extra_body": null
+    }
+  ],
+  "judge": {
+    "name": "judge_gemini_flash_lite",
+    "provider": "google_genai",
+    "model": "gemini-flash-lite-latest",
+    "temperature": 0.0,
+    "top_p": null,
+    "frequency_penalty": null,
+    "presence_penalty": null,
+    "max_tokens": 700,
+    "seed": 11,
+    "extra_body": {
+      "thinking_config": {
+        "thinking_budget": 0
+      }
+    }
+  },
+  "judges": [
+    {
+      "name": "judge_gemini_flash_lite",
+      "provider": "google_genai",
+      "model": "gemini-flash-lite-latest",
+      "temperature": 0.0,
+      "top_p": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "max_tokens": 700,
+      "seed": 11,
+      "extra_body": {
+        "thinking_config": {
+          "thinking_budget": 0
+        }
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "name": "legal_eval_v1_merged",
+      "path": "data/for_eval/merged_legal_eval_v1.jsonl",
+      "provenance": "canonical_legal_eval_v1",
+      "judge_mode": "auto",
+      "enabled": true,
+      "split_field": null,
+      "split_value": null,
+      "limit": null
+    }
+  ],
+  "retry": {
+    "max_attempts": 5,
+    "base_delay_s": 1.0,
+    "max_delay_s": 30.0
+  },
+  "cache": {
+    "enabled": true,
+    "dir": "cache"
+  },
+  "run": {
+    "run_id": "20260216_223746_d7f3",
+    "runs_root": "data/runs",
+    "output_dir": "outputs",
+    "default_system_prompt": "You are a careful legal reasoning assistant. Answer clearly and concisely, state uncertainty when needed, and avoid fabrication.",
+    "judge_pass_threshold": 0.7,
+    "response_parallel_workers": 8,
+    "response_rate_limit_rpm": 50,
+    "provider_response_rate_limit_rpm": {
+      "nim": 20
+    },
+    "judge_parallel_workers": 4,
+    "judge_rate_limit_rpm": 12,
+    "include_raw_provider_response": false
+  }
+}

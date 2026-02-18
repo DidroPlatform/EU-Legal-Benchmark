@@ -1,0 +1,1 @@
+{"provider": "bedrock", "model": "bedrock/converse/openai.gpt-oss-120b-1:0", "text": "", "usage": {"prompt_tokens": 1039, "completion_tokens": 4096, "total_tokens": 5135}, "latency_s": 20.42725199999404, "request_id": "chatcmpl-62338ee8-83d8-4e8e-9789-bf51ce89d814", "raw_response": null}

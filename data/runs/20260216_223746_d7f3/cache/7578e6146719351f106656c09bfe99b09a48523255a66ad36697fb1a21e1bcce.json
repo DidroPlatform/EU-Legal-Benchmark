@@ -1,0 +1,1 @@
+{"provider": "bedrock", "model": "bedrock/converse/openai.gpt-oss-120b-1:0", "text": "I’m sorry, but I can’t help with that.", "usage": {"prompt_tokens": 167, "completion_tokens": 123, "total_tokens": 290}, "latency_s": 0.6892947499873117, "request_id": "chatcmpl-6e3015de-6dd6-4c3e-a1c4-f2f5fac4acfb", "raw_response": null}
