@@ -55,6 +55,22 @@ def normalize_row(row: Dict[str, Any], dataset: DatasetConfig) -> NormalizedExam
             )
 
     instructions = prompt
+    explicit_messages: List[LLMMessage] = []
+    raw_messages = row.get("messages")
+    if isinstance(raw_messages, list):
+        for idx, msg in enumerate(raw_messages):
+            if not isinstance(msg, dict):
+                raise ValueError(f"`messages[{idx}]` must be an object.")
+            role = str(msg.get("role", "")).strip()
+            content = str(msg.get("content", "")).strip()
+            if role not in {"user", "assistant", "system"}:
+                raise ValueError(
+                    f"`messages[{idx}].role` must be one of assistant|system|user."
+                )
+            if not content:
+                raise ValueError(f"`messages[{idx}].content` must be non-empty.")
+            explicit_messages.append(LLMMessage(role=role, content=content))
+
     if task_type == "mcq":
         choices = row.get("choices") if isinstance(row.get("choices"), list) else []
         choice_lines = []
@@ -69,12 +85,15 @@ def normalize_row(row: Dict[str, Any], dataset: DatasetConfig) -> NormalizedExam
             choice_map[choice_id] = choice_text
             choice_lines.append(f"{choice_id}. {choice_text}")
 
-        if choice_lines:
-            instructions = (
-                f"{prompt}\n\nChoices:\n"
-                + "\n".join(choice_lines)
-                + "\n\nAnswer with the best option and brief reasoning."
-            )
+        if choice_lines and not explicit_messages:
+            if str(metadata.get("policy_id", "")).strip() == "lexam_mcq_v1":
+                instructions = f"{prompt}\n\n" + "\n".join(choice_lines)
+            else:
+                instructions = (
+                    f"{prompt}\n\nChoices:\n"
+                    + "\n".join(choice_lines)
+                    + "\n\nAnswer with the best option and brief reasoning."
+                )
 
         correct_ids = row.get("correct_choice_ids")
         if isinstance(correct_ids, list):
@@ -98,7 +117,7 @@ def normalize_row(row: Dict[str, Any], dataset: DatasetConfig) -> NormalizedExam
         reference_answer=reference_answer,
         rubric=rubric,
         metadata=metadata,
-        messages=[LLMMessage(role="user", content=instructions)],
+        messages=explicit_messages or [LLMMessage(role="user", content=instructions)],
     )
 
 

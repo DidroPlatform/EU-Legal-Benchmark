@@ -3,9 +3,16 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
+from .types import (
+    FINAL_RESPONSE_SOURCES,
+    RESPONSE_APIS,
+    FinalResponseSource,
+    JudgeMode,
+    ResponseAPI,
+)
 
 MAX_RESPONSE_RPM = 50
 
@@ -28,7 +35,7 @@ class DatasetConfig:
     name: str
     path: str
     provenance: str = "auto"
-    judge_mode: str = "auto"
+    judge_mode: JudgeMode = "auto"
     enabled: bool = True
     split_field: Optional[str] = None
     split_value: Optional[str] = None
@@ -49,6 +56,12 @@ class RunConfig:
         "You are a careful legal reasoning assistant. Answer clearly and concisely, "
         "state uncertainty when needed, and avoid fabrication."
     )
+    final_response_source: FinalResponseSource = "sampled"
+    prefilled_responses_path: Optional[str] = None
+    previous_output_path: Optional[str] = None
+    response_api: ResponseAPI = "chat.completions"
+    use_scratchpad: bool = False
+    web_search: bool = False
     judge_pass_threshold: float = 0.7
     response_parallel_workers: int = 8
     response_rate_limit_rpm: int = 50
@@ -78,15 +91,29 @@ class ModelConfig:
     presence_penalty: Optional[float] = None
     max_tokens: Optional[int] = None
     seed: Optional[int] = None
+    reasoning_effort: Optional[str] = None
+    thinking_budget: Optional[int] = None
     extra_body: Optional[Dict[str, object]] = None
+
+    def to_settings_dict(self) -> Dict[str, Any]:
+        return {
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty,
+            "presence_penalty": self.presence_penalty,
+            "max_tokens": self.max_tokens,
+            "seed": self.seed,
+            "reasoning_effort": self.reasoning_effort,
+            "thinking_budget": self.thinking_budget,
+            "extra_body": self.extra_body,
+        }
 
 
 @dataclass
 class BenchmarkConfig:
     providers: Dict[str, ProviderConfig]
     candidates: List[ModelConfig]
-    judge: ModelConfig
-    judges: List[ModelConfig] = field(default_factory=list)
+    judges: List[ModelConfig]
     data: DataConfig = field(default_factory=DataConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
@@ -102,12 +129,8 @@ class BenchmarkConfig:
 
         candidates = [ModelConfig(**m) for m in raw.get("candidates", [])]
         judges = [ModelConfig(**m) for m in raw.get("judges", [])]
-        legacy_judge = ModelConfig(**raw["judge"]) if "judge" in raw else None
         if not judges:
-            if legacy_judge is None:
-                raise ValueError("Config must define 'judges' (or legacy 'judge').")
-            judges = [legacy_judge]
-        judge = legacy_judge or judges[0]
+            raise ValueError("Config must define at least one judge model in 'judges'.")
 
         datasets = [DatasetConfig(**d) for d in raw.get("data", {}).get("datasets", [])]
         data = DataConfig(datasets=datasets)
@@ -119,7 +142,6 @@ class BenchmarkConfig:
         cfg = cls(
             providers=providers,
             candidates=candidates,
-            judge=judge,
             judges=judges,
             data=data,
             retry=retry,
@@ -136,8 +158,11 @@ class BenchmarkConfig:
         if not self.data.datasets:
             raise ValueError("Config must define at least one dataset in data.datasets.")
 
+        if not self.judges:
+            raise ValueError("Config must define at least one judge model in 'judges'.")
+
         known = set(self.providers.keys())
-        for m in [*self.candidates, *self.judges, self.judge]:
+        for m in [*self.candidates, *self.judges]:
             if m.provider not in known:
                 raise ValueError(f"Model '{m.name}' references unknown provider '{m.provider}'.")
 
@@ -179,10 +204,53 @@ class BenchmarkConfig:
         if self.run.judge_rate_limit_rpm < 0:
             raise ValueError("run.judge_rate_limit_rpm must be >= 0.")
 
+        if self.run.final_response_source not in FINAL_RESPONSE_SOURCES:
+            raise ValueError(
+                "run.final_response_source must be one of: sampled, prefilled, part_of_conversation."
+            )
+
+        if self.run.final_response_source == "prefilled":
+            if not self.run.prefilled_responses_path:
+                raise ValueError(
+                    "run.prefilled_responses_path must be set when run.final_response_source=prefilled."
+                )
+            if not Path(self.run.prefilled_responses_path).exists():
+                raise ValueError(
+                    f"run.prefilled_responses_path does not exist: {self.run.prefilled_responses_path}"
+                )
+        if self.run.final_response_source == "part_of_conversation":
+            if not self.run.previous_output_path:
+                raise ValueError(
+                    "run.previous_output_path must be set when "
+                    "run.final_response_source=part_of_conversation."
+                )
+            if not Path(self.run.previous_output_path).exists():
+                raise ValueError(
+                    f"run.previous_output_path does not exist: {self.run.previous_output_path}"
+                )
+
+        if self.run.response_api not in RESPONSE_APIS:
+            raise ValueError("run.response_api must be one of: responses, chat.completions.")
+        if self.run.final_response_source == "sampled":
+            from .providers.base import provider_supported_response_apis
+
+            for candidate in self.candidates:
+                supported = provider_supported_response_apis(candidate.provider)
+                if self.run.response_api not in supported:
+                    supported_text = ", ".join(sorted(supported))
+                    raise ValueError(
+                        f"Model '{candidate.name}' provider '{candidate.provider}' does not support "
+                        f"run.response_api='{self.run.response_api}'. Supported: {supported_text}."
+                    )
+
         for m in [*self.candidates, *self.judges]:
             if m.max_tokens is not None and m.max_tokens <= 0:
                 raise ValueError(
                     f"Model '{m.name}' has max_tokens={m.max_tokens}; must be > 0 when set."
+                )
+            if m.thinking_budget is not None and m.thinking_budget < 0:
+                raise ValueError(
+                    f"Model '{m.name}' has thinking_budget={m.thinking_budget}; must be >= 0 when set."
                 )
 
         candidate_names = [m.name for m in self.candidates]
@@ -204,3 +272,9 @@ class BenchmarkConfig:
         if not provider or not provider.api_key_env:
             return None
         return os.getenv(provider.api_key_env)
+
+    @property
+    def primary_judge(self) -> ModelConfig:
+        if not self.judges:
+            raise ValueError("Config must define at least one judge model in 'judges'.")
+        return self.judges[0]

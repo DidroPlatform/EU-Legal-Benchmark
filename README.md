@@ -52,8 +52,8 @@
 └────────────────────────────┬────────────────────────────────┘
                              │
                     ┌────────▼────────┐
-                    │  Schema Validator │
-                    │  (fail-fast)      │
+                    │ Config Validation  │
+                    │   (src/config.py)  │
                     └────────┬─────────┘
                              │
               ┌──────────────▼──────────────┐
@@ -75,6 +75,10 @@
               └─────────────────────────────┘
 ```
 
+Validation ownership is intentionally split:
+- Config-time validation in `src/config.py` (static enums, required fields, provider compatibility).
+- Runtime validation in runner execution flow (`src/runner/orchestrator.py`, `src/runner/generation.py`) for dynamic content and coverage checks.
+
 ---
 
 ## Datasets
@@ -89,7 +93,8 @@ The benchmark input is built from five curated upstream sources, each mapped to 
 | **INCLUDE-Base** | [CohereLabs/include-base-44](https://huggingface.co/datasets/CohereLabs/include-base-44) | MCQ | Exact-match |
 | **LAR-ECHR** | [AUEB-NLP/lar-echr](https://huggingface.co/datasets/AUEB-NLP/lar-echr) | MCQ | Exact-match |
 
-All datasets are converted into a canonical `legal_eval_v1` JSONL schema (see [`docs/DATA_SCHEMA.md`](docs/DATA_SCHEMA.md)) and merged into a single evaluation file.
+All datasets are converted into a canonical `legal_eval_v1` JSONL schema (see [`docs/DATA_SCHEMA.md`](docs/DATA_SCHEMA.md)) and merged into a single evaluation file.  
+For conversation-style tasks (for example PRBench), canonical rows can include a `messages` array so generation uses turn-structured chat input directly.
 
 ---
 
@@ -139,6 +144,9 @@ uv run python build_for_eval.py
 ```
 
 This produces `data/for_eval/merged_legal_eval_v1.jsonl`.
+
+Note: MCQ grading now requires canonical `correct_choice_ids` in each row. If you have older custom eval files,
+rebuild them via `build_for_eval.py` before running.
 
 ### Verify your setup
 
@@ -200,8 +208,15 @@ judges:
 | `response_parallel_workers` | Parallel candidate generation workers | `8` |
 | `response_rate_limit_rpm` | Shared RPM throttle for generation (1–50) | `50` |
 | `provider_response_rate_limit_rpm` | Optional per-provider generation RPM overrides (1–50) | `{}` |
+| `final_response_source` | Candidate answer source: `sampled`, `prefilled`, or `part_of_conversation` | `sampled` |
+| `prefilled_responses_path` | JSONL path used when `final_response_source=prefilled` | `null` |
+| `previous_output_path` | Path used when `final_response_source=part_of_conversation` (`.jsonl` or `.json`) | `null` |
+| `response_api` | Strict sampled-generation API mode: `responses` or `chat.completions` | `chat.completions` |
+| `use_scratchpad` | Append dataset scratchpad metadata to generation prompt | `false` |
+| `web_search` | Inject lightweight web-search hint in request extra body | `false` |
 | `judge_parallel_workers` | Parallel judge workers per response | `4` |
 | `judge_rate_limit_rpm` | RPM throttle for judge calls (0 = off) | `12` |
+| `include_raw_provider_response` | Include raw provider SDK response in trace rows | `false` |
 
 Example provider-specific throttle:
 
@@ -211,6 +226,19 @@ run:
   provider_response_rate_limit_rpm:
     nim: 20
 ```
+
+Prefilled response file contract (`run.final_response_source=prefilled`): one JSON object per line with
+`example_id`, `candidate_name`, and `response_text` (string). The run fails fast if any selected pair is missing.
+
+`part_of_conversation` contract (`run.final_response_source=part_of_conversation`): read previous
+responses from `.jsonl` rows with `example_id`, `candidate_name`, `response_text` (same shape as
+`responses.jsonl`), or from `.json` with either a list of those objects or a simple
+`{example_id: response_text}` mapping when exactly one candidate is configured.
+
+`response_api` provider support:
+- `google_genai`: `chat.completions` only.
+- LiteLLM-routed providers (`nim`, `bedrock`, `mistral_api`, `vercel_gateway`, etc.): `chat.completions` and `responses`.
+- Unsupported combinations fail fast during config/setup validation.
 
 ---
 
@@ -239,11 +267,31 @@ uv run python run.py --config config.yaml --progress off
 | `--progress {log,off}` | Progress output mode |
 | `--check-setup` | Validate environment and exit |
 
+### Backfill Workflow
+
+When a run completes with failures (generation errors, parse errors, or empty responses), you can repair it without re-running successful items:
+
+```bash
+# 1. Run targeted backfill for failed items
+uv run python scripts/backfill_run.py \
+  --config config.yaml \
+  --base-run-id <original_run_id> \
+  --include-failed-generation \
+  --include-parse-errors
+
+# 2. Merge backfill results onto the original run
+uv run python scripts/merge_backfill.py \
+  --base-run-id <original_run_id> \
+  --backfill-run-id <backfill_run_id>
+```
+
+The merge script overlays backfill rows onto the base run outputs (keyed by `example_id` + `candidate_name`), producing a repaired run with updated summary statistics.
+
 ---
 
 ## Output Artifacts
 
-Each run writes files to `outputs/<run_id>/`:
+Each run writes files to `data/runs/<run_id>/outputs/` by default:
 
 | File | Description |
 |------|-------------|
@@ -254,6 +302,8 @@ Each run writes files to `outputs/<run_id>/`:
 | `trace.jsonl` | Per-call trace data for debugging |
 | `summary.json` | Aggregate metrics (overall and per-dataset) |
 | `run_config.json` | Resolved config snapshot for reproducibility |
+
+> **PRBench scoring note:** For PRBench rubric rows, `judgments.jsonl` and `scored_responses.jsonl` include additional parity-oriented aggregation fields: `prbench_weighted_raw`, `prbench_points_normalized`, and `prbench_points_clipped`.
 
 ---
 
@@ -266,7 +316,7 @@ The project includes a comprehensive test suite covering schema validation, MCQ 
 uv run pytest
 
 # Run a specific test file
-uv run pytest tests/test_mcq_grading.py -v
+uv run pytest tests/judge/test_mcq_grading.py -v
 
 # Run with output
 uv run pytest -s
@@ -290,6 +340,10 @@ legal-benchmark-runner/
 │   ├── cache.py              # Disk-based response cache
 │   ├── retry.py              # Retry logic with exponential backoff
 │   ├── setup_checks.py       # Environment validation
+│   ├── io/                   # Shared JSON/JSONL IO helpers
+│   │   └── json_io.py        # read_json/read_jsonl/write_json/write_jsonl
+│   ├── runtime/              # Shared runtime bootstrap helpers
+│   │   └── bootstrap.py      # dotenv bootstrap helper
 │   ├── data/                 # Data loading, schema, attachments
 │   │   ├── schema.py         # Canonical JSONL schema validator
 │   │   ├── loader.py         # Dataset loader
@@ -303,14 +357,29 @@ legal-benchmark-runner/
 │   ├── judge/                # Judging & grading
 │   │   ├── judge.py          # Rubric & reference judging
 │   │   ├── mcq.py            # Deterministic MCQ grading
-│   │   └── parsing.py        # Judge output parsing
+│   │   ├── parsing.py        # Judge output parsing
+│   │   └── policies/         # Policy-specific judge handlers
+│   │       ├── base.py       # JudgePolicyHandler protocol
+│   │       ├── registry.py   # Policy handler lookup
+│   │       ├── shared.py     # Shared judge utilities
+│   │       ├── default_policy.py
+│   │       ├── prbench_policy.py
+│   │       ├── lexam_policy.py
+│   │       └── apex_policy.py
 │   ├── prompting/            # Prompt construction
 │   │   └── templates.py      # Per-policy prompt templates
 │   └── runner/               # Execution engine
 │       ├── orchestrator.py   # Two-phase orchestrator
+│       ├── context.py        # Shared runner execution context
+│       ├── services.py       # Typed service dependency contracts
+│       ├── contracts.py      # Typed phase handoff contracts
+│       ├── row_types.py      # Typed artifact row boundaries
+│       ├── row_builders.py   # Typed output row constructors
 │       ├── generation.py     # Candidate generation phase
 │       ├── judging.py        # Judging phase
 │       ├── output.py         # Artifact writing & summary
+│       ├── reconcile.py      # Deterministic row key/overlay helpers
+│       ├── response_sources.py # Prefilled/previous-output parsers
 │       ├── rate_limiter.py   # Per-minute rate limiter
 │       └── helpers.py        # Utility functions
 │
@@ -318,11 +387,23 @@ legal-benchmark-runner/
 │   ├── curated/              # Source datasets (JSONL)
 │   └── for_eval/             # Canonical merged eval file
 │
+├── scripts/                  # Operational utilities
+│   ├── backfill_run.py       # Targeted re-run for failed items
+│   └── merge_backfill.py     # Merge backfill outputs onto base run
+│
 ├── docs/                     # Documentation
 │   ├── DATA_SCHEMA.md        # Canonical JSONL schema spec
 │   └── POLICIES.md           # Dataset-specific policy docs
 │
 └── tests/                    # Test suite (pytest)
+    ├── core/                 # Cache, retry tests
+    ├── data/                 # Schema, loader, attachments tests
+    ├── judge/                # MCQ, rubric, policy tests
+    ├── providers/            # Provider adapter tests
+    ├── runner/               # Orchestrator, generation, judging tests
+    ├── runtime/              # Bootstrap tests
+    ├── scripts/              # Backfill script tests
+    └── setup/                # Setup validation tests
 ```
 
 ---
@@ -400,7 +481,6 @@ legal-benchmark-runner/
 | Symptom | Solution |
 |---------|----------|
 | Provider env var missing | Set the variable named in `providers.<name>.api_key_env` in your `.env` file |
-| Vertex project/location missing | Set `providers.vertex.project` / `location` in config, or export `VERTEXAI_PROJECT` / `VERTEXAI_LOCATION` |
 | No examples selected | Verify `data.datasets[*].enabled` is `true` and check `split_field`, `split_value`, and `limit` settings |
 | Module import errors | Run from the repo root so `src` is importable (e.g., `uv run python run.py`) |
 

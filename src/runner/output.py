@@ -1,19 +1,71 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Any, Dict, List
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 from src.config import BenchmarkConfig, ModelConfig
+from src.io.json_io import write_json, write_jsonl
+from src.runner.services import JudgeDescriptorFn
 
 
-def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+@dataclass
+class ModelStats:
+    responses: int = 0
+    judged: int = 0
+    score_sum: float = 0.0
+    pass_count: int = 0
+    prbench_normalized_sum: float = 0.0
+    prbench_normalized_count: int = 0
+    prbench_clipped_sum: float = 0.0
+    prbench_clipped_count: int = 0
+
+    def add_response(self) -> None:
+        self.responses += 1
+
+    def add_judgment(
+        self,
+        score: float,
+        passed: bool,
+        prbench_normalized: Optional[float],
+        prbench_clipped: Optional[float],
+    ) -> None:
+        self.judged += 1
+        self.score_sum += score
+        if passed:
+            self.pass_count += 1
+        if isinstance(prbench_normalized, (int, float)):
+            self.prbench_normalized_sum += float(prbench_normalized)
+            self.prbench_normalized_count += 1
+        if isinstance(prbench_clipped, (int, float)):
+            self.prbench_clipped_sum += float(prbench_clipped)
+            self.prbench_clipped_count += 1
+
+    def to_dict(self) -> Dict[str, Any]:
+        judged = max(1, self.judged)
+        result: Dict[str, Any] = {
+            "responses": self.responses,
+            "judged": self.judged,
+            "score_sum": self.score_sum,
+            "pass_count": self.pass_count,
+            "avg_score": self.score_sum / judged,
+            "pass_rate": self.pass_count / judged,
+        }
+        if self.prbench_normalized_count:
+            result["prbench_normalized_sum"] = self.prbench_normalized_sum
+            result["prbench_normalized_count"] = self.prbench_normalized_count
+            result["prbench_avg_points_normalized"] = (
+                self.prbench_normalized_sum / self.prbench_normalized_count
+            )
+        if self.prbench_clipped_count:
+            result["prbench_clipped_sum"] = self.prbench_clipped_sum
+            result["prbench_clipped_count"] = self.prbench_clipped_count
+            result["prbench_avg_points_clipped"] = (
+                self.prbench_clipped_sum / self.prbench_clipped_count
+            )
+        return result
 
 
-def _merge_scored_rows(
+def merge_scored_rows(
     responses: List[Dict[str, Any]], judgments: List[Dict[str, Any]], run_started_at_utc: str
 ) -> List[Dict[str, Any]]:
     judgment_by_key = {
@@ -41,61 +93,47 @@ def _merge_scored_rows(
                 "rationale": judgment.get("rationale"),
                 "criteria": judgment.get("criteria"),
                 "parse_error": judgment.get("parse_error"),
+                "prbench_weighted_raw": judgment.get("prbench_weighted_raw"),
+                "prbench_points_normalized": judgment.get("prbench_points_normalized"),
+                "prbench_points_clipped": judgment.get("prbench_points_clipped"),
                 "raw_judge": judgment.get("raw_judge"),
             }
         merged.append(row)
     return merged
 
 
-def _summary(responses: List[Dict[str, Any]], judgments: List[Dict[str, Any]]) -> Dict[str, Any]:
-    by_model: Dict[str, Dict[str, Any]] = {}
-    by_dataset_model: Dict[str, Dict[str, Dict[str, Any]]] = {}
+def build_summary(responses: List[Dict[str, Any]], judgments: List[Dict[str, Any]]) -> Dict[str, Any]:
+    by_model: Dict[str, ModelStats] = {}
+    by_dataset_model: Dict[str, Dict[str, ModelStats]] = {}
 
     for response in responses:
         model_name = response["candidate_name"]
         dataset_name = response["dataset"]
-        by_model.setdefault(model_name, {"responses": 0, "judged": 0, "score_sum": 0.0, "pass_count": 0})
-        by_model[model_name]["responses"] += 1
 
-        by_dataset_model.setdefault(dataset_name, {})
-        by_dataset_model[dataset_name].setdefault(
-            model_name,
-            {"responses": 0, "judged": 0, "score_sum": 0.0, "pass_count": 0},
-        )
-        by_dataset_model[dataset_name][model_name]["responses"] += 1
+        by_model.setdefault(model_name, ModelStats()).add_response()
+        by_dataset_model.setdefault(dataset_name, {}).setdefault(model_name, ModelStats()).add_response()
 
     for judgment in judgments:
         model_name = judgment["candidate_name"]
         dataset_name = judgment["dataset"]
+        score = float(judgment["score"])
+        passed = bool(judgment["pass"])
+        prbench_normalized = judgment.get("prbench_points_normalized")
+        prbench_clipped = judgment.get("prbench_points_clipped")
 
-        by_model.setdefault(model_name, {"responses": 0, "judged": 0, "score_sum": 0.0, "pass_count": 0})
-        by_model[model_name]["judged"] += 1
-        by_model[model_name]["score_sum"] += float(judgment["score"])
-        by_model[model_name]["pass_count"] += 1 if bool(judgment["pass"]) else 0
-
-        by_dataset_model.setdefault(dataset_name, {})
-        by_dataset_model[dataset_name].setdefault(
-            model_name,
-            {"responses": 0, "judged": 0, "score_sum": 0.0, "pass_count": 0},
+        by_model.setdefault(model_name, ModelStats()).add_judgment(
+            score, passed, prbench_normalized, prbench_clipped
         )
-        by_dataset_model[dataset_name][model_name]["judged"] += 1
-        by_dataset_model[dataset_name][model_name]["score_sum"] += float(judgment["score"])
-        by_dataset_model[dataset_name][model_name]["pass_count"] += 1 if bool(judgment["pass"]) else 0
-
-    for stats in by_model.values():
-        judged = max(1, stats["judged"])
-        stats["avg_score"] = stats["score_sum"] / judged
-        stats["pass_rate"] = stats["pass_count"] / judged
-
-    for dataset_stats in by_dataset_model.values():
-        for stats in dataset_stats.values():
-            judged = max(1, stats["judged"])
-            stats["avg_score"] = stats["score_sum"] / judged
-            stats["pass_rate"] = stats["pass_count"] / judged
+        by_dataset_model.setdefault(dataset_name, {}).setdefault(model_name, ModelStats()).add_judgment(
+            score, passed, prbench_normalized, prbench_clipped
+        )
 
     return {
-        "models": by_model,
-        "by_dataset": by_dataset_model,
+        "models": {name: stats.to_dict() for name, stats in by_model.items()},
+        "by_dataset": {
+            dataset: {name: stats.to_dict() for name, stats in model_map.items()}
+            for dataset, model_map in by_dataset_model.items()
+        },
         "num_responses": len(responses),
         "num_judgments": len(judgments),
     }
@@ -116,29 +154,28 @@ def write_run_outputs(
     failed_items: List[Dict[str, Any]],
     run_status: str,
     interrupted_stage: str | None,
-    judge_descriptor: Any,
+    judge_descriptor: JudgeDescriptorFn,
 ) -> Dict[str, Any]:
-    _write_jsonl(output_dir / "examples.jsonl", normalized_rows)
-    _write_jsonl(output_dir / "responses.jsonl", responses_rows)
-    _write_jsonl(output_dir / "judgments.jsonl", judgments_rows)
-    _write_jsonl(
+    write_jsonl(output_dir / "examples.jsonl", normalized_rows)
+    write_jsonl(output_dir / "responses.jsonl", responses_rows)
+    write_jsonl(output_dir / "judgments.jsonl", judgments_rows)
+    write_jsonl(
         output_dir / "scored_responses.jsonl",
-        _merge_scored_rows(
+        merge_scored_rows(
             responses=responses_rows,
             judgments=judgments_rows,
             run_started_at_utc=run_started_at_utc,
         ),
     )
-    _write_jsonl(output_dir / "trace.jsonl", trace_rows)
+    write_jsonl(output_dir / "trace.jsonl", trace_rows)
 
-    summary = _summary(responses_rows, judgments_rows)
+    summary = build_summary(responses_rows, judgments_rows)
     summary.update(
         {
             "run_id": run_id,
             "run_started_at_utc": run_started_at_utc,
             "selected_examples": len(examples),
             "datasets": dataset_stats,
-            "judge": judge_descriptor(config.judge),
             "judges": [judge_descriptor(j) for j in config.judges],
             "failed_items": failed_items,
             "num_failures": len(failed_items),
@@ -146,25 +183,18 @@ def write_run_outputs(
             "interrupted_stage": interrupted_stage,
         }
     )
-
-    with open(output_dir / "summary.json", "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2, ensure_ascii=False)
-
-    with open(output_dir / "run_config.json", "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "providers": sorted(list(config.providers.keys())),
-                "candidates": [c.__dict__ for c in config.candidates],
-                "judge": config.judge.__dict__,
-                "judges": [j.__dict__ for j in config.judges],
-                "datasets": [d.__dict__ for d in config.data.datasets],
-                "retry": config.retry.__dict__,
-                "cache": config.cache.__dict__,
-                "run": config.run.__dict__,
-            },
-            f,
-            indent=2,
-            ensure_ascii=False,
-        )
+    write_json(output_dir / "summary.json", summary)
+    write_json(
+        output_dir / "run_config.json",
+        {
+            "providers": sorted(list(config.providers.keys())),
+            "candidates": [c.__dict__ for c in config.candidates],
+            "judges": [j.__dict__ for j in config.judges],
+            "datasets": [d.__dict__ for d in config.data.datasets],
+            "retry": config.retry.__dict__,
+            "cache": config.cache.__dict__,
+            "run": config.run.__dict__,
+        },
+    )
 
     return summary

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, FrozenSet
 
 from ..config import ProviderConfig
-from ..types import LLMRequest, LLMResponse
-
-GOOGLE_PROVIDER_NAMES: frozenset[str] = frozenset({"google_genai", "google-genai", "gemini"})
+from ..types import GOOGLE_PROVIDER_NAMES, LLMRequest, LLMResponse
 
 
 class BaseProvider(ABC):
@@ -18,6 +16,10 @@ class BaseProvider(ABC):
     @abstractmethod
     def generate(self, request: LLMRequest, include_raw: bool = False) -> LLMResponse:
         raise NotImplementedError
+
+    @classmethod
+    def supported_response_apis(cls) -> FrozenSet[str]:
+        return frozenset({"chat.completions"})
 
     def close(self) -> None:
         return None
@@ -33,3 +35,10 @@ def usage_dict(prompt_tokens: int | None, completion_tokens: int | None) -> Dict
             else None
         ),
     }
+
+
+def provider_supported_response_apis(provider_name: str) -> FrozenSet[str]:
+    if provider_name in GOOGLE_PROVIDER_NAMES:
+        return frozenset({"chat.completions"})
+    # Non-Google providers route through LiteLLM adapter in this repository.
+    return frozenset({"chat.completions", "responses"})

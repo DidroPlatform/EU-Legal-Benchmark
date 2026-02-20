@@ -4,7 +4,7 @@ import uuid
 from typing import Any, Dict, List
 
 from src.config import ModelConfig
-from src.types import LLMMessage, LLMRequest
+from src.types import JudgeResult, LLMMessage, LLMRequest
 
 
 def _to_jsonable_messages(messages: List[LLMMessage]) -> List[Dict[str, str]]:
@@ -28,6 +28,9 @@ def _cache_key_payload(request: LLMRequest, stage: str) -> Dict[str, Any]:
         "presence_penalty": request.presence_penalty,
         "max_tokens": request.max_tokens,
         "seed": request.seed,
+        "response_api": request.response_api,
+        "reasoning_effort": request.reasoning_effort,
+        "thinking_budget": request.thinking_budget,
         "extra_body": request.extra_body,
     }
 
@@ -43,21 +46,15 @@ def _build_request(model: ModelConfig, messages: List[LLMMessage], request_id: s
         presence_penalty=model.presence_penalty,
         max_tokens=model.max_tokens,
         seed=model.seed,
+        reasoning_effort=model.reasoning_effort,
+        thinking_budget=model.thinking_budget,
         extra_body=model.extra_body,
         request_id=request_id,
     )
 
 
 def _model_settings(model: ModelConfig) -> Dict[str, Any]:
-    return {
-        "temperature": model.temperature,
-        "top_p": model.top_p,
-        "frequency_penalty": model.frequency_penalty,
-        "presence_penalty": model.presence_penalty,
-        "max_tokens": model.max_tokens,
-        "seed": model.seed,
-        "extra_body": model.extra_body,
-    }
+    return model.to_settings_dict()
 
 
 def _judge_descriptor(model: ModelConfig) -> Dict[str, Any]:
@@ -67,6 +64,18 @@ def _judge_descriptor(model: ModelConfig) -> Dict[str, Any]:
         "model": model.model,
         "settings": _model_settings(model),
     }
+
+
+def build_error_judge_result(error_message: str, context: str = "") -> JudgeResult:
+    prefix = f"Judge call failed{' for ' + context if context else ''}: "
+    return JudgeResult(
+        score=0.0,
+        passed=False,
+        rationale=prefix + error_message,
+        criteria={},
+        raw={"error": error_message},
+        parse_error=True,
+    )
 
 
 def _progress_enabled(mode: str) -> bool:

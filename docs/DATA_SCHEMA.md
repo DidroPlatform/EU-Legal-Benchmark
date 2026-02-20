@@ -21,6 +21,9 @@ Required for all rows:
 Optional for all rows:
 
 - `context` (string): additional supporting text. If absent, treated as `""`.
+- `messages` (array): optional conversation turns, each object:
+  - `role` (string, required): one of `user`, `assistant`, `system`.
+  - `content` (string, required): non-empty message text.
 - `attachments` (array): each item is an object with:
   - `path` (string, required): relative path to local artifact/document.
   - `kind` (string, optional): attachment type hint (`pdf`, `image`, etc.).
@@ -85,6 +88,13 @@ Choice object shape:
 
 Validation is strict for required/forbidden fields and field types.
 Unknown top-level fields are allowed but should be moved into `metadata` over time.
+
+When `messages` is provided, it must be well-formed (`role` + non-empty `content`),
+or row validation fails.
+
+Validation ownership note:
+- Config-time checks (for example response-source mode validity and required config paths) live in `src/config.py`.
+- Runtime checks (for example selected-pair coverage and dynamic row-content constraints) execute in runner flow (`src/runner/orchestrator.py`, `src/runner/generation.py`).
 
 ## ID stability rule
 

@@ -42,15 +42,10 @@ def _expected_choice_ids(example: NormalizedExample) -> List[str]:
         out = [str(x).strip() for x in vals if isinstance(x, str) and x.strip()]
         if out:
             return out
-
-    # Fallback for older rows: reference like "A. text"
-    ref = (example.reference_answer or "").strip()
-    if ref:
-        first_line = ref.splitlines()[0]
-        first_token = first_line.split(".", 1)[0].strip()
-        if first_token:
-            return [first_token]
-    return []
+    raise ValueError(
+        f"MCQ example '{example.id}' is missing `metadata.correct_choice_ids`; "
+        "rebuild canonical dataset inputs before running."
+    )
 
 
 def grade_mcq_output(

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Set
 
 from .config import BenchmarkConfig
-from .providers.base import GOOGLE_PROVIDER_NAMES
+from .providers.base import GOOGLE_PROVIDER_NAMES, provider_supported_response_apis
 
 
 _PROVIDER_IMPORTS = {
@@ -30,9 +30,9 @@ class SetupReport:
 
 
 def required_provider_names(config: BenchmarkConfig) -> Set[str]:
-    names = {config.judge.provider}
-    names.update(judge.provider for judge in config.judges)
-    names.update(candidate.provider for candidate in config.candidates)
+    names = {judge.provider for judge in config.judges}
+    if config.run.final_response_source == "sampled":
+        names.update(candidate.provider for candidate in config.candidates)
     return names
 
 
@@ -54,7 +54,10 @@ def check_setup(config: BenchmarkConfig) -> SetupReport:
             report.errors.append(f"Provider setup requires Python package '{genai_module}' but it is not installed.")
             return report
 
-    configured_models = [*config.candidates, *config.judges, config.judge]
+    configured_candidates = (
+        list(config.candidates) if config.run.final_response_source == "sampled" else []
+    )
+    configured_models = [*configured_candidates, *config.judges]
     uses_bedrock_models = any(model.model.strip().startswith("bedrock/") for model in configured_models)
     if uses_bedrock_models and importlib.util.find_spec(_BEDROCK_IMPORT) is None:
         report.errors.append(
@@ -98,6 +101,26 @@ def check_setup(config: BenchmarkConfig) -> SetupReport:
                     f"Provider '{name}' requires Google auth dependencies for Vertex. "
                     "Install with: pip install 'litellm[google]' "
                     "or pip install google-cloud-aiplatform."
+                )
+
+    if config.run.final_response_source == "sampled":
+        for candidate in config.candidates:
+            supported = provider_supported_response_apis(candidate.provider)
+            if config.run.response_api not in supported:
+                report.errors.append(
+                    f"Model '{candidate.name}' provider '{candidate.provider}' does not support "
+                    f"run.response_api='{config.run.response_api}'. "
+                    f"Supported: {', '.join(sorted(supported))}."
+                )
+        if uses_litellm and config.run.response_api == "responses":
+            try:
+                import litellm  # type: ignore
+            except Exception:
+                litellm = None  # pragma: no cover
+            if litellm is None or not callable(getattr(litellm, "responses", None)):
+                report.errors.append(
+                    "run.response_api='responses' requires LiteLLM responses API support, "
+                    "but current litellm package does not expose callable `responses`."
                 )
 
     return report

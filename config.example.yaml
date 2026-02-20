@@ -205,3 +205,19 @@ run:
   # Conservative Gemini judge throttle; set 0 to disable throttling.
   judge_rate_limit_rpm: 12
   include_raw_provider_response: false
+  # Candidate response source:
+  # - sampled: call model API
+  # - prefilled: read from run.prefilled_responses_path JSONL
+  # - part_of_conversation: read from run.previous_output_path (.jsonl or .json)
+  final_response_source: sampled
+  # Required when final_response_source=prefilled.
+  prefilled_responses_path: null
+  # Required when final_response_source=part_of_conversation.
+  previous_output_path: null
+  # Strict API mode for sampled candidate calls.
+  # - google_genai supports: chat.completions
+  # - litellm-routed providers support: chat.completions, responses
+  response_api: chat.completions
+  # Optional parity knobs.
+  use_scratchpad: false
+  web_search: false

@@ -1,6 +1,7 @@
 """Judge logic for benchmark scaffold."""
 
 from .judge import (
+    apply_policy_score_postprocessing,
     apply_weighted_rubric_score,
     build_judge_messages,
     build_rubric_criterion_judge_messages,
@@ -11,6 +12,7 @@ from .mcq import grade_mcq_output
 from .parsing import extract_json_object
 
 __all__ = [
+    "apply_policy_score_postprocessing",
     "apply_weighted_rubric_score",
     "build_judge_messages",
     "build_rubric_criterion_judge_messages",

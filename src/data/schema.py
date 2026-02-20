@@ -12,6 +12,7 @@ TASK_TYPES = {"rubric_qa", "reference_qa", "mcq"}
 COMMON_REQUIRED_FIELDS = {"schema_version", "id", "dataset", "task_type", "prompt"}
 COMMON_OPTIONAL_FIELDS = {
     "context",
+    "messages",
     "attachments",
     "metadata",
     "rubric",
@@ -49,6 +50,29 @@ def _validate_attachments(attachments: Any, errors: List[str]) -> None:
                 errors.append(
                     f"`attachments[{i}].{key}` must be a string when provided."
                 )
+
+
+def _validate_messages(messages: Any, errors: List[str]) -> None:
+    if messages is None:
+        return
+    if not isinstance(messages, list):
+        errors.append("`messages` must be an array when provided.")
+        return
+    allowed_roles = {"user", "assistant", "system"}
+    for i, item in enumerate(messages):
+        if not isinstance(item, dict):
+            errors.append(f"`messages[{i}]` must be an object.")
+            continue
+        role = item.get("role")
+        content = item.get("content")
+        if not is_nonempty_str(role):
+            errors.append(f"`messages[{i}].role` must be a non-empty string.")
+        elif str(role) not in allowed_roles:
+            errors.append(
+                f"`messages[{i}].role` must be one of: assistant, system, user."
+            )
+        if not is_nonempty_str(content):
+            errors.append(f"`messages[{i}].content` must be a non-empty string.")
 
 
 def _validate_rubric(rubric: Any, errors: List[str]) -> None:
@@ -150,6 +174,7 @@ def validate_canonical_row(row: Mapping[str, Any]) -> Tuple[List[str], List[str]
     if "metadata" in row and not isinstance(row["metadata"], dict):
         errors.append("`metadata` must be an object when provided.")
 
+    _validate_messages(row.get("messages"), errors)
     _validate_attachments(row.get("attachments"), errors)
 
     allowed_fields = COMMON_REQUIRED_FIELDS | COMMON_OPTIONAL_FIELDS
@@ -214,14 +239,6 @@ def iter_jsonl_with_issues(
                 )
                 continue
             yield line_no, parsed, None
-
-
-def iter_jsonl(path: str | Path) -> Iterable[Dict[str, Any]]:
-    for _, row, issue in iter_jsonl_with_issues(path):
-        if issue is not None:
-            raise ValueError(f"{issue.error} at line {issue.line}.")
-        assert row is not None
-        yield row
 
 
 def validate_jsonl_file(path: str | Path) -> Dict[str, Any]:

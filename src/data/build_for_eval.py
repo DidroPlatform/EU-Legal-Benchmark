@@ -4,6 +4,7 @@ import argparse
 import ast
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Tuple
@@ -69,25 +70,63 @@ def _extract_weight(annotations: Any) -> float | None:
 
 
 def _convert_prbench_row(row: Mapping[str, Any]) -> Dict[str, Any]:
-    prompts = [
-        str(row.get(f"prompt_{i}", "")).strip()
-        for i in range(10)
-        if isinstance(row.get(f"prompt_{i}"), str)
-        and str(row.get(f"prompt_{i}")).strip()
-    ]
-    prompt = prompts[-1] if prompts else ""
+    references_by_turn: Dict[int, List[str]] = {i: [] for i in range(10)}
+    for key, value in row.items():
+        key_text = str(key)
+        if "reference" not in key_text.lower():
+            continue
+        match = re.search(r"(\d+)$", key_text)
+        if not match:
+            continue
+        turn_idx = int(match.group(1))
+        if turn_idx < 0 or turn_idx > 9:
+            continue
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if isinstance(item, str) and item.strip():
+                references_by_turn[turn_idx].append(item.strip())
 
-    context_chunks: List[str] = []
+    messages: List[Dict[str, str]] = []
+    user_prompts: List[str] = []
+    source_turns: List[Dict[str, Any]] = []
+
     for i in range(10):
-        refs = row.get(f"reference_texts_{i}")
-        if isinstance(refs, list):
-            snippets = [
-                str(x).strip() for x in refs if isinstance(x, str) and x.strip()
-            ]
-            if snippets:
-                context_chunks.append(
-                    f"Reference texts turn {i}: " + "\n\n".join(snippets)
-                )
+        prompt_raw = row.get(f"prompt_{i}")
+        response_raw = row.get(f"response_{i}")
+        if prompt_raw is not None and not isinstance(prompt_raw, str):
+            raise ValueError(f"prompt_{i} must be a string or null.")
+        if response_raw is not None and not isinstance(response_raw, str):
+            raise ValueError(f"response_{i} must be a string or null.")
+
+        prompt_text = str(prompt_raw or "").strip()
+        response_text = str(response_raw or "").strip()
+        ref_snippets = references_by_turn.get(i, [])
+
+        source_turns.append(
+            {
+                "turn": i,
+                "prompt": prompt_text,
+                "response": response_text,
+                "reference_texts": ref_snippets,
+            }
+        )
+
+        if prompt_text:
+            if ref_snippets:
+                ref_blocks = [
+                    f"Reference Text {idx}:\n{text}" for idx, text in enumerate(ref_snippets)
+                ]
+                prompt_text = "\n\n".join(ref_blocks) + "\n\n" + prompt_text
+            user_prompts.append(prompt_text)
+            messages.append({"role": "user", "content": prompt_text})
+
+        if response_text:
+            messages.append({"role": "assistant", "content": response_text})
+
+    if not user_prompts:
+        raise ValueError("PRBench row has no non-empty user prompts (prompt_0..prompt_9).")
+    prompt = user_prompts[-1]
 
     rubric_items = row.get("rubric") if isinstance(row.get("rubric"), list) else []
     rubric: List[Dict[str, Any]] = []
@@ -120,7 +159,6 @@ def _convert_prbench_row(row: Mapping[str, Any]) -> Dict[str, Any]:
         dataset="prbench",
         task_type="rubric_qa",
         prompt=prompt,
-        context="\n\n".join(context_chunks),
         metadata={
             "topic": row.get("topic"),
             "field": row.get("field"),
@@ -129,10 +167,13 @@ def _convert_prbench_row(row: Mapping[str, Any]) -> Dict[str, Any]:
             "decision_type": row.get("decision_type"),
             "economic_pathway": row.get("economic_pathway"),
             "classified_countries": row.get("classified_countries"),
+            "scratchpad": row.get("scratchpad"),
+            "source_turns": source_turns,
             "source_id": example_id,
             "policy_id": "prbench_v1",
         },
     )
+    out["messages"] = messages
     out["rubric"] = rubric
     return out
 

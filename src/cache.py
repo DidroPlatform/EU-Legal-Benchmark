@@ -54,3 +54,12 @@ class DiskCache:
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(value, f, ensure_ascii=False)
         tmp_path.replace(path)
+
+    def delete(self, key: str) -> None:
+        if not self.enabled:
+            return
+        path = self._path_for_key(key)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            _log_warning(f"Failed to delete cache entry {path.name}: {exc}")

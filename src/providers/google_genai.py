@@ -28,6 +28,10 @@ class GoogleGenAIProvider(BaseProvider):
     def close(self) -> None:
         self._client.close()
 
+    @classmethod
+    def supported_response_apis(cls) -> frozenset[str]:
+        return frozenset({"chat.completions"})
+
     def _split_messages(self, messages: List[LLMMessage]) -> tuple[List[LLMMessage], List[LLMMessage]]:
         system_msgs = [m for m in messages if m.role == "system"]
         non_system_msgs = [m for m in messages if m.role != "system"]
@@ -51,6 +55,11 @@ class GoogleGenAIProvider(BaseProvider):
         return contents
 
     def generate(self, request: LLMRequest, include_raw: bool = False) -> LLMResponse:
+        if request.response_api != "chat.completions":
+            raise ValueError(
+                f"Provider '{self.provider_name}' does not support request.response_api='{request.response_api}'. "
+                "Supported: chat.completions."
+            )
         start = time.perf_counter()
         system_msgs, non_system_msgs = self._split_messages(request.messages)
         config_kwargs: Dict[str, Any] = {}
@@ -69,6 +78,10 @@ class GoogleGenAIProvider(BaseProvider):
             config_kwargs["presence_penalty"] = request.presence_penalty
         if request.seed is not None:
             config_kwargs["seed"] = request.seed
+        if request.reasoning_effort is not None:
+            config_kwargs["reasoning_effort"] = request.reasoning_effort
+        if request.thinking_budget is not None:
+            config_kwargs["thinking_budget"] = request.thinking_budget
         if request.extra_body:
             config_kwargs.update(request.extra_body)
 

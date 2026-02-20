@@ -40,14 +40,12 @@ htmlcov/
 *.ipynb
 .ipynb_checkpoints/
 
-# Data files (benchmark datasets — not published in public repo)
-data/
-
 # Generated benchmark artifacts
 # (can contain prompts/responses/provider payloads)
 outputs/
 cache/
 logs/
+data/runs/
 
 # Temporary files
 *.log
@@ -57,9 +55,15 @@ logs/
 
 # Additions
 .agent/
+.codex/
 .cursor/
 AGENTS.md
 MODELS.md
 PLAN_MODEL_IMPLEMENTATION.md
 EXECPLAN*.md
 KNOWN_RUNTIME_ISSUES.md
+benchmarks/
+
+# Local benchmark planning docs
+docs/EXECPLAN.md
+docs/benchmarks/

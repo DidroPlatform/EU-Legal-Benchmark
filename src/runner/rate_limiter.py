@@ -4,8 +4,10 @@ import threading
 import time
 from typing import Callable
 
+from src.types import WaitableRateLimiter
 
-class PerMinuteRateLimiter:
+
+class PerMinuteRateLimiter(WaitableRateLimiter):
     def __init__(
         self,
         requests_per_minute: int,

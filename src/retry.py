@@ -14,15 +14,64 @@ T = TypeVar("T")
 TRANSIENT_MARKERS = (
     "rate limit",
     "429",
+    "500",
+    "502",
+    "503",
+    "504",
     "timeout",
+    "timed out",
     "temporarily unavailable",
     "connection",
+    "connecttimeout",
+    "connecterror",
+    "remoteprotocolerror",
+    "disconnected",
+    "unavailable",
+    "deadline_exceeded",
+    "ratelimiterror",
+    "service_tier_capacity_exceeded",
+    "capacity exceeded",
+    "overloaded",
+    "empty response text",
     "service unavailable",
     "internal server error",
 )
 
 
+def _extract_status_code(exc: Exception) -> Optional[int]:
+    for attr in ("status_code", "code"):
+        value = getattr(exc, attr, None)
+        try:
+            if value is not None:
+                return int(value)
+        except (TypeError, ValueError):
+            continue
+
+    response = getattr(exc, "response", None)
+    if response is not None:
+        value = getattr(response, "status_code", None)
+        try:
+            if value is not None:
+                return int(value)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _extract_status_text(exc: Exception) -> str:
+    value = getattr(exc, "status", None)
+    if value is None:
+        return ""
+    return str(value).lower()
+
+
 def is_transient_error(exc: Exception) -> bool:
+    status_code = _extract_status_code(exc)
+    if status_code in {429, 500, 502, 503, 504}:
+        return True
+    status_text = _extract_status_text(exc)
+    if status_text in {"unavailable", "deadline_exceeded", "service_unavailable", "too_many_requests"}:
+        return True
     msg = str(exc).lower()
     return any(marker in msg for marker in TRANSIENT_MARKERS)
 
